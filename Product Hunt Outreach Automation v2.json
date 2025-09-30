@@ -1,0 +1,379 @@
+{
+  "name": "Product Hunt Outreach Automation",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b0c35668-ab05-4114-9cd0-df2201fef42c",
+      "name": "Daily Schedule Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Triggers the flow once daily at 9 AM to check for new Product Hunt launches"
+    },
+    {
+      "parameters": {
+        "url": "https://api.producthunt.com/v2/api/graphql",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "query { posts(order: NEWEST, first: 20) { edges { node { id, name, tagline, description, url, createdAt, makers { edges { node { id, name, username, profileUrl, twitterUsername } } } } } } }"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "39160469-5531-4bfe-8e28-5a162def8010",
+      "name": "Fetch Product Hunt Launches",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "Makes a GraphQL request to Product Hunt API to get the latest launches"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract and format the launch data from the GraphQL response\nconst launches = [];\nconst response = $input.first().json;\n\n// Check if we have valid data\nif (!response || !response.data || !response.data.posts || !response.data.posts.edges) {\n  return [{ json: { error: 'Invalid response from Product Hunt API' } }];\n}\n\n// Process each launch\nresponse.data.posts.edges.forEach(edge => {\n  const launch = edge.node;\n  \n  // Format makers data\n  const makers = [];\n  if (launch.makers && launch.makers.edges) {\n    launch.makers.edges.forEach(makerEdge => {\n      const maker = makerEdge.node;\n      makers.push({\n        id: maker.id,\n        name: maker.name,\n        username: maker.username,\n        profileUrl: maker.profileUrl,\n        twitterUsername: maker.twitterUsername\n      });\n    });\n  }\n  \n  // Add formatted launch to our array\n  launches.push({\n    id: launch.id,\n    name: launch.name,\n    tagline: launch.tagline,\n    description: launch.description,\n    url: launch.url,\n    createdAt: launch.createdAt,\n    makers: makers\n  });\n});\n\nreturn launches.map(launch => ({ json: launch }));"
+      },
+      "id": "27dcb595-1ac8-4c29-b83f-ec29e97b1ee4",
+      "name": "Format Launch Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "notes": "Extracts and formats the launch data from the GraphQL response"
+    },
+    {
+      "parameters": {},
+      "id": "a7be2e5d-d54f-4e7f-98bb-c5dedcc28d6b",
+      "name": "Get Previously Processed Launches",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        224,
+        208
+      ],
+      "notes": "Retrieves the list of previously processed launches to avoid duplicates"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter out launches that have already been processed\nconst newLaunches = [];\nconst processedLaunches = [];\n\n// Get current launches\nconst currentLaunches = $input.first().json;\n\n// Get processed launches if available\nif ($input.last() && $input.last().json) {\n  const processedData = $input.last().json;\n  if (Array.isArray(processedData)) {\n    processedLaunches.push(...processedData);\n  }\n}\n\n// Get processed launch IDs for quick lookup\nconst processedIds = new Set(processedLaunches.map(launch => launch.id));\n\n// Filter out already processed launches\nif (Array.isArray(currentLaunches)) {\n  currentLaunches.forEach(launch => {\n    if (!processedIds.has(launch.id)) {\n      newLaunches.push(launch);\n    }\n  });\n} else {\n  // If we have a single launch\n  if (!processedIds.has(currentLaunches.id)) {\n    newLaunches.push(currentLaunches);\n  }\n}\n\n// Return the new launches\nreturn newLaunches.map(launch => ({ json: launch }));"
+      },
+      "id": "776c850a-996e-4e5c-87ed-5335cf76ad4e",
+      "name": "Filter New Launches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ],
+      "notes": "Filters out launches that have already been processed"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare data for email sending\nconst emailsToSend = [];\n\n// Get the new launches\nconst newLaunches = $input.all().map(item => item.json);\n\n// Process each launch and create email data for each maker\nnewLaunches.forEach(launch => {\n  if (launch.makers && launch.makers.length > 0) {\n    launch.makers.forEach(maker => {\n      // Create personalized email data\n      emailsToSend.push({\n        to: maker.email || `${maker.username}@producthunt.com`, // Fallback if email not available\n        subject: `Congratulations on launching ${launch.name} on Product Hunt!`,\n        html: `\n          <p>Hi ${maker.name},</p>\n          <p>I noticed your recent launch <strong>${launch.name}</strong> on Product Hunt and wanted to reach out to congratulate you!</p>\n          <p><em>${launch.tagline}</em></p>\n          <p>${launch.description}</p>\n          <p>I'm impressed by what you've built and would love to learn more about your journey. Would you be open to a brief chat sometime next week?</p>\n          <p>Best regards,<br>Your Name</p>\n        `,\n        maker: maker,\n        launch: launch\n      });\n    });\n  }\n});\n\nreturn emailsToSend.map(email => ({ json: email }));"
+      },
+      "id": "5c31e98c-396c-4e98-9284-36ad4d4bc4a0",
+      "name": "Prepare Email Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "notes": "Prepares personalized email data for each maker of the new launches"
+    },
+    {
+      "parameters": {
+        "fromEmail": "your-email@example.com",
+        "toEmail": "={{ $json.to }}",
+        "subject": "={{ $json.subject }}",
+        "emailFormat": "html",
+        "options": {}
+      },
+      "id": "af992f65-e781-4058-ab9c-ccd97c736c7a",
+      "name": "Send Outreach Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        0
+      ],
+      "webhookId": "7817a047-8d32-40c9-b75d-1ae959fbbaa5",
+      "notes": "Sends personalized outreach emails to each maker"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Update the list of processed launches\nconst processedLaunches = [];\n\n// Get previously processed launches if available\nif ($input.first() && $input.first().json) {\n  const processedData = $input.first().json;\n  if (Array.isArray(processedData)) {\n    processedLaunches.push(...processedData);\n  }\n}\n\n// Get the newly processed launches\nconst newLaunches = $input.last().json;\n\n// Add new launches to the processed list\nif (Array.isArray(newLaunches)) {\n  processedLaunches.push(...newLaunches);\n} else {\n  processedLaunches.push(newLaunches);\n}\n\n// Return the updated list\nreturn [{ json: processedLaunches }];"
+      },
+      "id": "f0f7f293-1c41-46a9-b2d4-8d56f3d61bfe",
+      "name": "Update Processed Launches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        208
+      ],
+      "notes": "Updates the list of processed launches to avoid duplicates in future runs"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "2b3fc9a2-56b9-4a18-8f8d-6c7ffcaa6c0c",
+      "name": "Save Processed Launches",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        208
+      ],
+      "notes": "Saves the updated list of processed launches for future reference"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-new-launches",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1774063c-b309-454d-85bd-b3f2de1557c0",
+      "name": "Check for New Launches",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        672,
+        208
+      ],
+      "notes": "Checks if there are any new launches to process"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log that no new launches were found\nconsole.log('No new Product Hunt launches to process today.');\n\nreturn [{ json: { message: 'No new launches found' } }];"
+      },
+      "id": "e93e4ad6-2a7c-4f42-8318-b2615172b9cd",
+      "name": "No New Launches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        416
+      ],
+      "notes": "Handles the case when no new launches are found"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "b5ee3852-b242-4e92-bde0-bac8354dbc71",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1328,
+        0
+      ],
+      "notes": "Provides a success response when emails are sent"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 500
+        }
+      },
+      "id": "8f4bc789-178a-479b-84ac-3bb4d62c3a48",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1344,
+        368
+      ],
+      "notes": "Provides an error response when something goes wrong"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle errors in the flow\nconst error = $input.first().json;\nconsole.error('Error in Product Hunt outreach flow:', error);\n\n// Log the error for debugging\nreturn [{ json: { error: error.message || 'Unknown error', timestamp: new Date().toISOString() } }];"
+      },
+      "id": "62e6144f-dc6c-4410-85e4-fc9f69d60223",
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        416
+      ],
+      "notes": "Handles errors that occur during the flow execution"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Product Hunt Launches",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Previously Processed Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Product Hunt Launches": {
+      "main": [
+        [
+          {
+            "node": "Format Launch Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Launch Data": {
+      "main": [
+        [
+          {
+            "node": "Filter New Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Launches": {
+      "main": [
+        [
+          {
+            "node": "Check for New Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for New Launches": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email Data": {
+      "main": [
+        [
+          {
+            "node": "Send Outreach Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update Processed Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Outreach Email": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Processed Launches": {
+      "main": [
+        [
+          {
+            "node": "Save Processed Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No New Launches": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "64e8cef3-9cd8-4f4e-9407-b319cbdefcfc",
+  "meta": {
+    "instanceId": "6d781aaa894967afb3f7c4ab8ad0c19b8c2ba7a7ea0927aaffe38690f2e9f653"
+  },
+  "id": "AngyZoa5zpCsruNg",
+  "tags": []
+}

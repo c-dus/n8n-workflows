@@ -1,0 +1,370 @@
+{
+  "name": "Product Hunt Outreach",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1408,
+        208
+      ],
+      "comment": "Triggers the flow once a day at 8 AM UTC to check for new Product Hunt launches.",
+      "id": "177fe078-855e-4b2a-bbd1-2dc646c9190f"
+    },
+    {
+      "parameters": {
+        "operation": "lookup",
+        "lookupColumn": "A",
+        "lookupValue": "last_timestamp",
+        "options": {}
+      },
+      "name": "Get Last Timestamp",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        -1200,
+        208
+      ],
+      "comment": "Reads the last processed timestamp from Google Sheets (assume column A has key 'last_timestamp', column B has the ISO date value). Replace documentId with your actual Google Sheet ID.",
+      "id": "166ee053-0645-4512-ba3c-2ff5fe4ae388"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "since_date",
+              "value": "={{ $node[\"Get Last Timestamp\"].json[\"B\"] || new Date(Date.now() - 24*60*60*1000).toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Set Since Date",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -1008,
+        208
+      ],
+      "comment": "Sets the 'since_date' to the last timestamp or defaults to 24 hours ago if none exists.",
+      "id": "a64d52c1-24d3-4516-bdaa-73f36018db23"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.producthunt.com/v2/api/graphql",
+        "authentication": "headerAuth",
+        "sendBody": true,
+        "contentType": "application/json",
+        "options": {}
+      },
+      "name": "Fetch PH Launches",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [
+        -800,
+        208
+      ],
+      "comment": "Fetches the latest 100 featured launches from Product Hunt GraphQL API. Set up headerAuth credential with 'Authorization' header and 'Bearer your_token' value.",
+      "id": "98599631-bc28-446b-b2fd-aaa4e338cb08"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json[\"data\"][\"posts\"] }} "
+            }
+          ]
+        }
+      },
+      "name": "Check Fetch Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        208
+      ],
+      "comment": "Checks if the API fetch was successful (posts data exists). True proceeds to processing; false goes to error handler.",
+      "id": "d4946a7e-51c6-4e94-85f7-ed6ee34fc95d"
+    },
+    {
+      "parameters": {
+        "jsCode": "const since = new Date($node[\"Set Since Date\"].json[\"since_date\"]);\nreturn $input.first().json.data.posts.edges\n  .map(edge => ({ json: edge.node }))\n  .filter(item => new Date(item.json.featuredAt) > since);"
+      },
+      "name": "Filter New Launches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -400,
+        112
+      ],
+      "comment": "Filters the fetched launches to include only those with featuredAt > since_date (determines new launches, filtering out already processed).",
+      "id": "3f45f9f7-2f0f-4c9f-9b78-dac3a85c6d58"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $input.all().length }}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "name": "Check for New Launches",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        112
+      ],
+      "comment": "Determines if there are any new launches to process. True proceeds to processing; false ends the flow.",
+      "id": "7ca5e454-2901-454f-a745-b43d95599a87"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().flatMap(item => {\n  const post = item.json;\n  return post.makers.map(maker => ({ json: { post, maker } }));\n});"
+      },
+      "name": "Process Launches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "comment": "Processes new launches: flattens data into one item per maker-post pair, preparing for personalized email sending.",
+      "id": "feac5b7c-24af-46e0-ae9a-c2f313eb6cfc"
+    },
+    {
+      "parameters": {
+        "fromEmail": "your_email@example.com",
+        "toEmail": "={{ $json.maker.username + \"@example.com\" }}",
+        "subject": "Congrats on your Product Hunt Launch!",
+        "text": "={{ \"Hi \" + $json.maker.name + \",\\n\\nCongratulations on launching \" + $json.post.name + \" on Product Hunt! We'd love to discuss potential collaboration.\\n\\nBest,\\nYour Name\" }}",
+        "options": {}
+      },
+      "name": "Send Outreach Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ],
+      "comment": "Sends personalized outreach email to each maker. Note: Product Hunt API does not provide emails; this uses a placeholder (username@example.com). Replace with actual email logic (e.g., via email finder tool or scraping) in a prior Code node.",
+      "id": "176547dd-4aee-4cb4-a905-0e20937a5085",
+      "credentials": {
+        "smtp": {
+          "name": "SMTP Credentials",
+          "id": null
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const timestamps = $input.all().map(item => new Date(item.json.post.featuredAt).getTime());\nconst maxTime = Math.max(...timestamps);\nreturn [{ json: { max_featuredAt: new Date(maxTime).toISOString() } }];"
+      },
+      "name": "Calculate Max Timestamp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "comment": "Calculates the maximum featuredAt timestamp from processed launches for updating storage.",
+      "id": "b3544b2e-ffcc-4ab4-b0f0-8f964d2ce072"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "options": {}
+      },
+      "name": "Update Last Timestamp",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [
+        608,
+        0
+      ],
+      "comment": "Updates the last processed timestamp in Google Sheets for the next run. Matches key 'last_timestamp' in column A and updates column B.",
+      "id": "b268ad2d-bb65-4c25-9139-ecb2be8db48f"
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "error_message",
+              "value": "Failed to fetch Product Hunt data."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        304
+      ],
+      "comment": "Error handling node: Sets an error message. Extend this to send notifications (e.g., connect to another Email node).",
+      "id": "d6743208-b99f-42e9-ac4c-43fa18bf24f6"
+    },
+    {
+      "parameters": {},
+      "name": "No New Launches",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        16,
+        240
+      ],
+      "comment": "No-op node for the end of the flow when there are no new launches.",
+      "id": "7e67c698-1f09-4d7d-a8c7-e45ac18e2e53"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Get Last Timestamp",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Set Since Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Since Date": {
+      "main": [
+        [
+          {
+            "node": "Fetch PH Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch PH Launches": {
+      "main": [
+        [
+          {
+            "node": "Check Fetch Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Fetch Success": {
+      "main": [
+        [
+          {
+            "node": "Filter New Launches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New Launches": {
+      "main": [
+        [
+          {
+            "node": "Check for New Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for New Launches": {
+      "main": [
+        [
+          {
+            "node": "Process Launches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Launches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Launches": {
+      "main": [
+        [
+          {
+            "node": "Send Outreach Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Outreach Email": {
+      "main": [
+        [
+          {
+            "node": "Calculate Max Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Max Timestamp": {
+      "main": [
+        [
+          {
+            "node": "Update Last Timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b4514c17-9f09-4c74-9acb-1a44b1704316",
+  "meta": {
+    "instanceId": "6d781aaa894967afb3f7c4ab8ad0c19b8c2ba7a7ea0927aaffe38690f2e9f653"
+  },
+  "id": "vAOkszMDdhpVJFiV",
+  "tags": []
+}
