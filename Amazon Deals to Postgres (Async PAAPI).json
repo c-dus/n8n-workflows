@@ -1,0 +1,1054 @@
+{
+  "name": "Amazon Deals → Postgres (Creators API) v1",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "f819872b-65a2-4b5b-977a-bfe3f010bb10",
+      "name": "Every 6 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        40064,
+        4656
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c4",
+              "name": "amazonAffiliateTag",
+              "value": "=cybernetwork-20",
+              "type": "string"
+            },
+            {
+              "id": "c6",
+              "name": "openrouterModel",
+              "value": "openrouter/owl-alpha",
+              "type": "string"
+            },
+            {
+              "id": "c7",
+              "name": "openrouterReferer",
+              "value": "https://example.com",
+              "type": "string"
+            },
+            {
+              "id": "c8",
+              "name": "openrouterAppName",
+              "value": "Your Site",
+              "type": "string"
+            },
+            {
+              "id": "c9",
+              "name": "classifierConfidenceThreshold",
+              "value": 0.6,
+              "type": "number"
+            },
+            {
+              "id": "c10",
+              "name": "defaultCategoryId",
+              "value": "=8efcfba1-ef71-41cd-a533-2d92dd152ac7",
+              "type": "string"
+            },
+            {
+              "id": "c14",
+              "name": "s3Bucket",
+              "value": "awsbucket",
+              "type": "string"
+            },
+            {
+              "id": "c16",
+              "name": "maxDealsPerRun",
+              "value": 5,
+              "type": "number"
+            },
+            {
+              "id": "c19",
+              "name": "throttleSec",
+              "value": 2,
+              "type": "number"
+            },
+            {
+              "id": "c20",
+              "name": "overrideAiFields",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "c21",
+              "name": "aiRateLimitSeconds",
+              "value": 45,
+              "type": "number"
+            },
+            {
+              "id": "p7",
+              "name": "creatorsCredentialId",
+              "value": "=amzn1.application-oa2-client-XXXXXXXXXXXXXXXXXXXXXXXX",
+              "type": "string"
+            },
+            {
+              "id": "p8",
+              "name": "creatorsCredentialSecret",
+              "value": "=amzn1.oa2-cs.v1-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+              "type": "string"
+            },
+            {
+              "id": "s1",
+              "name": "creatorsTokenHost",
+              "value": "api.amazon.com",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "creatorsHost",
+              "value": "creatorsapi.amazon",
+              "type": "string"
+            },
+            {
+              "id": "s3",
+              "name": "creatorsScope",
+              "value": "creatorsapi::default",
+              "type": "string"
+            },
+            {
+              "id": "s4",
+              "name": "creatorsMarketplace",
+              "value": "www.amazon.com",
+              "type": "string"
+            },
+            {
+              "id": "s5",
+              "name": "creatorsKeywords",
+              "value": "wireless earbuds",
+              "type": "string"
+            },
+            {
+              "id": "s6",
+              "name": "creatorsItemCount",
+              "value": 10,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f5be228c-1cfd-4c93-99ca-c02e51785eba",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        40272,
+        4656
+      ],
+      "notes": "Creators API v1: data source is the Amazon Creators API (PA-API successor for affiliates), OAuth2 client-credentials — NO AWS SigV4, NO refresh token. ⚠️ creatorsCredentialId/creatorsCredentialSecret are the Credential ID + Secret created in Associates Central → Tools → Creators API, stored HERE (secret-in-file tradeoff: Code nodes can't read the credentials manager and $env is unavailable on this plan). Account must be approved (≥10 qualifying sales / 30 days). Token: POST https://{creatorsTokenHost}/auth/o2/token (grant_type=client_credentials, scope=creatorsapi::default). API: POST https://{creatorsHost}/catalog/v1/searchItems with Authorization: Bearer + x-marketplace={creatorsMarketplace}. Discovery = searchItems by creatorsKeywords; price/images/RATINGS come from the search response (offersV2/images/customerReviews) — one call, no separate pricing node. amazonAffiliateTag = PartnerTag. OpenRouter + S3 keys still use n8n credentials."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, COALESCE(eyebrow, '') AS description\nFROM categories\nORDER BY name ASC;",
+        "options": {}
+      },
+      "id": "ed3c0770-afa4-4959-b35e-3bcc7da1e3ee",
+      "name": "Fetch Categories",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        40464,
+        4656
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "Pp8DqRRvEdB44B6i",
+          "name": "Every Offer DB"
+        }
+      },
+      "notes": "One row per category. Reused via $('Fetch Categories').all() in Build Classifier Request."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, COALESCE(description, '') AS description\nFROM subcategories\nORDER BY name ASC;",
+        "options": {}
+      },
+      "id": "57e3a9e5-c56a-4dc9-9627-aa76139976e4",
+      "name": "Fetch Subcategories",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        40672,
+        4656
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "Pp8DqRRvEdB44B6i",
+          "name": "Every Offer DB"
+        }
+      },
+      "notes": "NEW: Loads subcategories table so AI-generated subcategory name can be resolved to subcategory_id (uuid). Adjust column names if schema differs."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Creators API: OAuth2 client-credentials → short-lived access token (~1h). No refresh token.\nconst cfg = $('Config').first().json;\nconst credId     = String(cfg.creatorsCredentialId || '').trim();\nconst credSecret = String(cfg.creatorsCredentialSecret || '').trim();\nconst scope      = cfg.creatorsScope || 'creatorsapi::default';\nconst tokenHost  = cfg.creatorsTokenHost || 'api.amazon.com';\nif (!credId || !credSecret || /YOUR_/.test(credId) || /YOUR_/.test(credSecret)) {\n  throw new Error('Creators API config missing: set creatorsCredentialId and creatorsCredentialSecret in the Config node (created in Associates Central → Tools → Creators API).');\n}\nconst enc = encodeURIComponent;\nconst form = `grant_type=client_credentials&scope=${enc(scope)}&client_id=${enc(credId)}&client_secret=${enc(credSecret)}`;\nlet resp;\ntry {\n  resp = await this.helpers.httpRequest({\n    method: 'POST',\n    url: `https://${tokenHost}/auth/o2/token`,\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },\n    body: form,\n    returnFullResponse: true,\n    timeout: 30000,\n  });\n} catch (err) {\n  const r = (err && err.response) || (err && err.cause && err.cause.response) || {};\n  const b = (r.data !== undefined) ? r.data : (r.body !== undefined ? r.body : (err.message || String(err)));\n  const txt = (typeof b === 'string') ? b : JSON.stringify(b);\n  const st = r.status || r.statusCode || ((String((err && err.message) || '').match(/status code (\\d{3})/i) || [])[1]) || '?';\n  throw new Error(`Creators token request failed (HTTP ${st}): ${txt.slice(0,300)}. Causes: invalid_client (wrong Credential ID/Secret), invalid_scope, or unauthorized_client (account not approved for the Creators API). If it's a content-type/400 error, the token endpoint may want a JSON body instead of form-encoded.`);\n}\nlet data = resp.body;\nif (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }\nconst accessToken = data && data.access_token;\nif (!accessToken) throw new Error(`Creators token response had no access_token: ${JSON.stringify(data).slice(0,300)}`);\nconsole.log(JSON.stringify({ event: 'creators_token', expiresIn: data.expires_in, ts: new Date().toISOString() }));\nreturn [{ json: { accessToken } }];\n"
+      },
+      "id": "4a0be87b-40f9-4a67-b587-b19e3315c313",
+      "name": "Get Creators Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        40864,
+        4656
+      ],
+      "notes": "Creators API: OAuth2 client-credentials token. POST https://{creatorsTokenHost}/auth/o2/token with grant_type=client_credentials, scope=creatorsapi::default, creatorsCredentialId/Secret in the body → access_token. No refresh token (client-credentials). Throws on invalid_client/invalid_scope/unauthorized_client (latter = account not approved). If a 400 content-type error appears, switch the body to JSON."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Creators API: searchItems by keywords. ONE call returns price + images + ratings.\nconst cfg = $('Config').first().json;\nconst accessToken = $input.first().json.accessToken;\nconst host        = cfg.creatorsHost || 'creatorsapi.amazon';\nconst marketplace = cfg.creatorsMarketplace || 'www.amazon.com';\nconst kw          = String(cfg.creatorsKeywords || '').trim();\nconst itemCount   = Math.max(1, Math.min(10, Number(cfg.creatorsItemCount) || 10));\nconst partnerTag  = String(cfg.amazonAffiliateTag || '').trim();\nif (!accessToken) throw new Error('No Creators access token from Get Creators Token.');\nif (!kw) throw new Error('creatorsKeywords is empty in Config.');\nif (!partnerTag) throw new Error('amazonAffiliateTag (partnerTag) is empty in Config.');\n\nconst requestBody = {\n  keywords: kw,\n  partnerTag,\n  partnerType: 'Associates',\n  itemCount,\n  resources: [\n    'itemInfo.title','itemInfo.byLineInfo','itemInfo.features',\n    'offersV2.listings.price','offersV2.listings.savingBasis',\n    'images.primary.large','browseNodeInfo.browseNodes',\n    'customerReviews.count','customerReviews.starRating'\n  ],\n};\n\nlet resp;\ntry {\n  resp = await this.helpers.httpRequest({\n    method: 'POST',\n    url: `https://${host}/catalog/v1/searchItems`,\n    headers: {\n      'Authorization': `Bearer ${accessToken}`,\n      'x-marketplace': marketplace,\n      'Content-Type': 'application/json; charset=utf-8',\n      'Accept': 'application/json',\n    },\n    body: requestBody,\n    json: true,\n    returnFullResponse: true,\n    timeout: 60000,\n  });\n} catch (err) {\n  const r = (err && err.response) || (err && err.cause && err.cause.response) || {};\n  const b = (r.data !== undefined) ? r.data : (r.body !== undefined ? r.body : (err.message || String(err)));\n  const txt = (typeof b === 'string') ? b : JSON.stringify(b);\n  const st = r.status || r.statusCode || ((String((err && err.message) || '').match(/status code (\\d{3})/i) || [])[1]) || '?';\n  throw new Error(`Creators searchItems failed (HTTP ${st}): ${txt.slice(0,400)} | 401/403 = token scope or account not approved (need approved Creators account + ≥10 qualifying sales / 30 days); 400 = bad body/resources; also verify creatorsHost (${host}) and x-marketplace (${marketplace}).`);\n}\nlet data = resp.body;\nif (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }\nif (data && Array.isArray(data.errors) && data.errors.length) {\n  const e = data.errors[0];\n  throw new Error(`Creators API error ${e.code || ''}: ${e.message || JSON.stringify(data.errors).slice(0,300)}`);\n}\nconst items = (data && data.searchResult && Array.isArray(data.searchResult.items)) ? data.searchResult.items\n            : (Array.isArray(data.items) ? data.items : []);\nconsole.log(JSON.stringify({ event: 'creators_searched', count: items.length, ts: new Date().toISOString() }));\nreturn [{ json: { items } }];\n"
+      },
+      "id": "d571fa91-e4e5-4f6f-a127-ad4a67a13812",
+      "name": "Search Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        41072,
+        4656
+      ],
+      "notes": "Creators API: POST https://{creatorsHost}/catalog/v1/searchItems with Authorization: Bearer + x-marketplace. lowerCamelCase PA-API resources incl. offersV2.listings.price (+savingBasis), images.primary.large, customerReviews (ratings). Returns searchResult.items. Replaces the SP-API catalog+pricing pair — price/images/ratings now come from this single call."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Creators API: emit one { asin, item } per product (item already carries price/images/ratings).\nconst cfg = $('Config').first().json;\nconst inp = $input.first().json;\nconst items = Array.isArray(inp.items) ? inp.items : [];\n\nif (!items.length) {\n  throw new Error('Creators API returned 0 items. Check creatorsKeywords / creatorsMarketplace and that the Creators account is approved.');\n}\n\nconst cap = Math.max(1, Number(cfg.maxDealsPerRun) || 10);\nconst out = items.slice(0, cap).map((item) => ({ json: { asin: item && item.asin, item } }));\nconsole.log(JSON.stringify({ event: 'creators_items_extracted', count: out.length, ts: new Date().toISOString() }));\nreturn out;\n"
+      },
+      "id": "013d13f7-63fd-4638-bdef-cf4464169c5b",
+      "name": "Extract Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        41360,
+        4656
+      ],
+      "notes": "Creators API: emits { asin, item } per product (capped at maxDealsPerRun). The item already carries price (offersV2), images, and customerReviews from the search response — no separate pricing call."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "042fe02a-5629-4b55-a1d4-c60ea5ecee28",
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        41264,
+        4656
+      ],
+      "notes": "Output 0 = done (end of run). Output 1 = loop body, processes one PA-API item ({ asin, item }) at a time → Normalise."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────────────────────────────────────\n// Normalise (Creators API v1) — map a Creators API searchItems item → product shape.\n// Output json/product shape is IDENTICAL to prior versions, so downstream is unchanged.\n// Creators mirrors PA-API in lowerCamelCase; price/images/RATINGS come from the search item.\n// Field paths are defensive (official schema is login-gated); keeps first-valid-price fallback.\n// ─────────────────────────────────────────────────────────────────────────────\nconst cfg  = $('Config').first().json;\nconst loop = $('Loop Over Items').first().json;\nconst asin = loop.asin;\nconst item = loop.item || ($input.first().json && $input.first().json.item) || $input.first().json;\n\nconst fail = (reason) => [{ json: { valid: false, skipReason: reason, asin } }];\n\nif (!asin || typeof asin !== 'string') return fail('missing ASIN');\nif (!item || typeof item !== 'object') return fail('no Creators item object');\n\n// ── Affiliate tag + clean tagless URL ─────────────────────────────────────────\nconst AFFILIATE_TAG_RE = /^[a-zA-Z0-9][a-zA-Z0-9-]*-\\d{2}$/;\nconst affiliateTag = cfg.amazonAffiliateTag ? String(cfg.amazonAffiliateTag).trim() : '';\nif (!affiliateTag || !AFFILIATE_TAG_RE.test(affiliateTag)) return fail(`amazonAffiliateTag invalid: \"${cfg.amazonAffiliateTag}\"`);\n\nconst AMAZON_DP_RE = /^https:\\/\\/(?:www\\.)?amazon\\.[a-z.]{2,10}\\/dp\\/([A-Z0-9]{10})(?:[\\/?#].*)?$/;\nconst affiliateUrl = `https://www.amazon.com/dp/${asin}`;   // clean, tagless (tag re-appended at render)\nif (!AMAZON_DP_RE.test(affiliateUrl)) return fail(`affiliate_url failed for asin \"${asin}\"`);\n\n// ── Helpers ───────────────────────────────────────────────────────────────────\nconst slugify = (s) => String(s||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,96);\nconst round2  = (n) => Math.round(n * 100) / 100;\nconst clamp   = (n,lo,hi) => Math.max(lo, Math.min(hi, n));\nconst num     = (v) => { if (v==null) return null; if (typeof v==='number') return v; const m=String(v).replace(/,/g,'').match(/[\\d]+(?:\\.[\\d]+)?/); return m?Number(m[0]):null; };\n\n// ── Creators API field extraction (lowerCamelCase PA-API) ─────────────────────\nconst info = item.itemInfo || {};\nconst name = info.title && info.title.displayValue;\nif (!name) return fail('Creators item has no itemInfo.title.displayValue');\n\n// price: offersV2.listings[0].price (money.amount | amount | displayString); savingBasis → original\nconst listing = (item.offersV2 && Array.isArray(item.offersV2.listings)) ? item.offersV2.listings[0] : null;\nconst priceObj = listing && listing.price;\nconst money = priceObj && (priceObj.money || priceObj);\nlet price = money ? (num(money.amount) ?? num(money.value) ?? num(priceObj.displayString) ?? num(priceObj.displayAmount)) : null;\nlet currency = (money && (money.currencyCode || money.currency)) || 'USD';\nconst sbMoney = listing && listing.savingBasis && (listing.savingBasis.money || listing.savingBasis);\nlet originalPrice = sbMoney ? (num(sbMoney.amount) ?? num(sbMoney.value)) : null;\nlet priceFallback = false;\n\nconst priceStore = $getWorkflowStaticData('global');\nif (priceStore.priceRunId !== $execution.id) { priceStore.priceRunId = $execution.id; priceStore.firstValidPrice = null; priceStore.firstValidCurrency = null; }\nif (price != null) {\n  if (priceStore.firstValidPrice == null) { priceStore.firstValidPrice = price; priceStore.firstValidCurrency = currency; }\n} else if (priceStore.firstValidPrice != null) {\n  price = priceStore.firstValidPrice; currency = priceStore.firstValidCurrency || currency; originalPrice = null; priceFallback = true;\n  console.log(JSON.stringify({ event:'price_fallback', asin, borrowedPrice: price, currency, ts: new Date().toISOString() }));\n} else {\n  return fail('price_unresolved_no_fallback (no offersV2 price in the Creators response)');\n}\n\n// discount: explicit savings percentage, else derive from savingBasis\nlet discountPct = 0;\nconst savingsPct = priceObj && priceObj.savings && (priceObj.savings.percentage != null ? priceObj.savings.percentage : (priceObj.savings.money && priceObj.savings.money.percentage));\nif (!priceFallback && savingsPct != null) discountPct = Math.round(Number(savingsPct));\nelse if (!priceFallback && price && originalPrice && originalPrice > price) discountPct = Math.round(((originalPrice - price) / originalPrice) * 100);\n\n// ── Brand ─────────────────────────────────────────────────────────────────────\nconst byline = info.byLineInfo || {};\nlet brand = (byline.brand && byline.brand.displayValue) || (byline.manufacturer && byline.manufacturer.displayValue);\nif (!brand && typeof name === 'string') brand = name.split(/\\s+/)[0];\nif (!brand) return fail('no brand');\n\n// ── Image (images.primary.large) ──────────────────────────────────────────────\nconst large = item.images && item.images.primary && item.images.primary.large;\nconst imageUrl = large && large.url;\nif (!imageUrl) return fail('no image URL (Creators images.primary.large)');\nconst imageDim = (large && (Number(large.width) || Number(large.height))) || 1500;\n\n// ── Rating (REAL — Creators exposes customerReviews) ──────────────────────────\nconst cr = item.customerReviews || {};\nlet rating = num(cr.starRating && (cr.starRating.value != null ? cr.starRating.value : cr.starRating));\nif (rating == null) rating = num(cr.rating);\nrating = Math.round(clamp(Number(rating)||0,0,5)*10)/10;\n\n// ── Features / tags ───────────────────────────────────────────────────────────\nconst featureBullets = (info.features && Array.isArray(info.features.displayValues)) ? info.features.displayValues : [];\nconst nodes = item.browseNodeInfo && item.browseNodeInfo.browseNodes;\nconst tags = Array.isArray(nodes) ? nodes.map(n => n && n.displayName).filter(Boolean) : [];\n\nconst shortDesc = String(featureBullets[0] || name).slice(0,200);\nconst longDesc  = featureBullets.length ? featureBullets.slice(0,6).join('\\n\\n') : '';\n\nconst slug     = `${slugify(name)}-${asin.toLowerCase()}`;\nconst title    = String(name).slice(0,120);\nconst imageKey = `products/amazon/${asin}/main.jpg`;\n\nconst CURRENCIES = ['USD','GBP','EUR','CAD','AUD'];\nif (!CURRENCIES.includes(currency)) currency = 'USD';\n\nconsole.log(JSON.stringify({ event:'url_validated', asin, affiliate_url: affiliateUrl, priceFallback, rating, discountPct, ts: new Date().toISOString() }));\n\nreturn [{\n  json: {\n    valid: true, skipReason: null, priceFallback,\n    asin, slug, imageUrl, imageKey, imageDim, imageAlt: title,\n    product: {\n      slug,\n      title,\n      brand:                String(brand).slice(0,80),\n      short_description:    shortDesc,\n      description:          longDesc,\n      price:                round2(price),\n      original_price:       originalPrice != null ? round2(originalPrice) : null,\n      currency,\n      discount_percent:     discountPct,\n      deal_label:           null,\n      affiliate_source:     'amazon',\n      amazon_affiliate_tag: affiliateTag,\n      affiliate_url:        affiliateUrl,   // clean HTTPS amazon.com/dp/ASIN — tagless\n      rating,                              // REAL star rating from Creators customerReviews\n      features:             featureBullets.slice(0,10),\n      tags,\n      pros:                 [],\n      cons:                 [],\n      subcategory_id:       null,\n      seo_title:            null,\n      seo_description:      null,\n      seo_og_image:         null,\n    },\n  },\n}];\n"
+      },
+      "id": "b02dc90e-2d6a-4104-8cc5-79fac8f8a6a7",
+      "name": "Normalise",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        41664,
+        4816
+      ],
+      "notes": "SP-API v1: maps an SP-API Catalog Items item (read from Loop Over Items: { asin, item }) → product shape. name/brand from summaries[0]; price from the injected item._price (Get Competitive Pricing); image from images[0].images (MAIN/largest, with width/height); tags from summaries[0].browseClassification. rating=0, features=[], original_price=null, discount=0 (SP-API has no ratings, feature bullets, or list price). affiliate_url CLEAN/tagless. Price-less items borrow the run's FIRST valid price (priceFallback); first-item-with-no-price is skipped. valid=false → 'Is Valid?' false-branch → Log Skipped Item → loop continues. Output shape identical to the ScraperAPI version, so downstream is unchanged."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "73b530e1-23d2-46a3-a9fc-c433b0aa3370",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        41872,
+        4816
+      ],
+      "notes": "v3.1: replaces the old Filter (which DROPPED invalid items and stalled the loop — the loop-back edge never fired, halting the run). TRUE (valid) → Check Existing AI Fields. FALSE (skipReason set) → Log Skipped Item → back to Loop Over Items, so the queue always advances."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log Skipped Item (v3.1) — audit trail for items the workflow skips.\n// Reached only on the FALSE branch of 'Is Valid?' (unavailable, no price to borrow,\n// no brand, no image, bad URL, etc.). Connects back to Loop Over Items so the run\n// continues to the next ASIN instead of terminating.\nconst item = $input.first().json;\nconst entry = {\n  event:  'item_skipped',\n  asin:   item.asin ?? null,\n  reason: item.skipReason ?? 'unknown',\n  ts:     new Date().toISOString(),\n};\nconsole.log(JSON.stringify(entry));\nreturn [{ json: { ...item, _skipped: true, _log: entry } }];\n"
+      },
+      "id": "d280f3af-1b38-440c-a908-1067dda4ea43",
+      "name": "Log Skipped Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        42064,
+        4976
+      ],
+      "notes": "v3.1: NEW. Structured 'item_skipped' log (asin + reason + timestamp) for auditing, then loops back to Loop Over Items."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- v3.2: single-row seed LEFT JOIN-ed to products so this ALWAYS returns exactly\n-- one row. A new product (no match) yields found=false and every has_*=false —\n-- previously WHERE slug=$1 returned 0 rows, the node emitted no items, and the\n-- whole loop body halted at this node.\nSELECT\n  (p.slug IS NOT NULL)                                                       AS found,\n  COALESCE(p.subcategory_id IS NOT NULL, false)                              AS has_subcategory_id,\n  COALESCE(array_length(p.pros, 1) > 0, false)                               AS has_pros,\n  COALESCE(array_length(p.cons, 1) > 0, false)                               AS has_cons,\n  COALESCE(p.seo_title IS NOT NULL AND p.seo_title <> '', false)             AS has_seo_title,\n  COALESCE(p.seo_description IS NOT NULL AND p.seo_description <> '', false)  AS has_seo_description\nFROM (SELECT $1::text AS slug) q\nLEFT JOIN products p ON p.slug = q.slug;",
+        "options": {
+          "queryReplacement": "={{ [$json.product.slug] }}"
+        }
+      },
+      "id": "834ef486-f151-4ba8-9b1e-9289bc698b61",
+      "name": "Check Existing AI Fields",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        42064,
+        4816
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "Pp8DqRRvEdB44B6i",
+          "name": "Every Offer DB"
+        }
+      },
+      "notes": "v3.2: query rewritten to ALWAYS return exactly one row (single-row seed LEFT JOIN products) so new products no longer halt the loop here. found=false + has_*=false for new products → Compute AI Gate sets skipAi=false → AI runs. alwaysOutputData:true is an extra safety net."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ── AI Gate Decision ─────────────────────────────────────────────────────────\n// Reads the DB check result and the overrideAiFields config flag.\n// Sets skipAi=true when all 5 AI fields are already populated AND override is off.\nconst cfg    = $('Config').first().json;\nconst norm   = $('Is Valid?').first().json;\nconst dbRows = $input.all();     // 0 rows = new product, 1 row = existing\n\nconst override = cfg.overrideAiFields === true;\n\nlet allPopulated = false;\nif (dbRows.length > 0) {\n  const r = dbRows[0].json;\n  allPopulated = r.has_subcategory_id && r.has_pros && r.has_cons && r.has_seo_title && r.has_seo_description;\n}\n\nconst skipAi = allPopulated && !override;\n\nconsole.log(JSON.stringify({\n  event: 'ai_gate', asin: norm.asin,\n  allPopulated, override, skipAi,\n  ts: new Date().toISOString(),\n}));\n\nreturn [{ json: { ...norm, skipAi } }];\n"
+      },
+      "id": "a6db2ef7-e65b-47f3-97a8-2f63e0ac5591",
+      "name": "Compute AI Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        42272,
+        4816
+      ],
+      "notes": "NEW: Merges DB-populated check + overrideAiFields flag into a single skipAi boolean."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "skip",
+              "leftValue": "={{ $json.skipAi }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "edd7d782-66a7-48e2-ab43-a57ea44efe00",
+      "name": "AI Fields Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        42464,
+        4816
+      ],
+      "notes": "NEW: true-output (skipAi=false) → AI enrichment branch. false-output (skipAi=true) → bypass branch."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────────────────────────────────────\n// Build AI Enrichment Request\n// Single OpenRouter call for: subcategory name, pros[], cons[], seo_title, seo_description.\n// subcategory is sent as a NAME here; resolved to a uuid in Parse & Validate AI Fields.\n// ─────────────────────────────────────────────────────────────────────────────\nconst cfg     = $('Config').first().json;\nconst norm    = $input.first().json;\nconst product = norm.product;\n\n// Build the list of available subcategory names for the prompt\nconst subcatRows = $('Fetch Subcategories').all().map(i => i.json);\nconst subcatNames = subcatRows\n  .filter(r => r?.name)\n  .map(r => String(r.name).trim())\n  .slice(0, 80);    // cap prompt length\n\nconst featureBullets = Array.isArray(product.features) ? product.features : [];\nconst tags           = Array.isArray(product.tags)     ? product.tags     : [];\n\nconst productContext = [\n  `Title: ${product.title}`,\n  `Brand: ${product.brand}`,\n  product.short_description ? `Short description: ${product.short_description}` : null,\n  product.description       ? `Full description: ${String(product.description).slice(0,500)}` : null,\n  featureBullets.length     ? `Key features:\\n${featureBullets.slice(0,8).map(f=>`- ${f}`).join('\\n')}` : null,\n  tags.length               ? `Category breadcrumbs: ${tags.slice(0,5).join(' > ')}` : null,\n  `Price: ${product.currency} ${product.price}`,\n  product.original_price    ? `Original price: ${product.currency} ${product.original_price}` : null,\n  product.rating            ? `Average rating: ${product.rating}/5` : null,\n].filter(Boolean).join('\\n');\n\nconst subcatSection = subcatNames.length\n  ? `Available subcategories (choose the single best fit; use exact spelling):\\n${subcatNames.map(n=>`- ${n}`).join('\\n')}`\n  : 'No subcategory list available — infer the most appropriate retail subcategory name.';\n\nconst systemPrompt = [\n  'You are a product data enrichment assistant for an affiliate e-commerce site.',\n  'Return ONLY this JSON object — no prose, no markdown fences:',\n  '{',\n  '  \"subcategory\": \"<exact name from the list, or best-fit retail subcategory>\",',\n  '  \"pros\": [\"<advantage 1>\", \"<advantage 2>\", \"<advantage 3>\"],',\n  '  \"cons\": [\"<disadvantage 1>\", \"<disadvantage 2>\", \"<disadvantage 3>\"],',\n  '  \"seo_title\": \"<keyword-rich title, HARD MAX 60 characters>\",',\n  '  \"seo_description\": \"<meta description, HARD MAX 160 characters, include primary keyword>\"',\n  '}',\n  '',\n  'RULES:',\n  '- pros and cons: 3 to 5 items each; each item max 120 characters.',\n  '- seo_title: truncate to 60 chars if needed — never exceed.',\n  '- seo_description: truncate to 160 chars if needed — never exceed.',\n  '- subcategory: use the exact spelling from the provided list when possible.',\n  '- Output the JSON object only.',\n].join('\\n');\n\nconst requestBody = {\n  model:       cfg.openrouterModel,\n  messages: [\n    { role: 'system', content: systemPrompt },\n    { role: 'user',   content: `${subcatSection}\\n\\nProduct details:\\n${productContext}` },\n  ],\n  temperature: 0.3,\n  max_tokens:  700,\n};\n\nconsole.log(JSON.stringify({ event: 'ai_enrichment_built', asin: norm.asin, subcatCount: subcatNames.length, ts: new Date().toISOString() }));\n\nreturn [{ json: { requestBody, normData: norm } }];\n"
+      },
+      "id": "826918e4-a560-4942-ba4d-8528b5bcf8ce",
+      "name": "Build AI Enrichment Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        42672,
+        4656
+      ],
+      "notes": "NEW: Sends available subcategory names in prompt so AI picks an exact match. pros/cons requested as arrays, not strings."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $('Config').first().json.openrouterReferer }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "={{ $('Config').first().json.openrouterAppName }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "4b5d1725-9586-49a9-9fe3-3645c9aa41e4",
+      "name": "Call OpenRouter (AI Enrichment)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        42864,
+        4656
+      ],
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "openRouterApi": {
+          "id": "tH0AfYU9QeaRMYVN",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "v3.3: Authorization injected by the predefined 'OpenRouter API' credential (paste API key only — n8n adds 'Bearer <key>'). You MUST create this credential and SELECT it on this node after import, else OpenRouter returns 401 'No auth credentials found' and pros/cons/seo come back empty. neverError:true captures 429/4xx bodies (now surfaced by Parse & Validate). 4 retries @ 3 s."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────────────────────────────────────\n// Parse & Validate AI Fields  v2\n//\n// DB schema truth:\n//   pros         → text[]   (stored as jsonb array in payload, cast in upsert)\n//   cons         → text[]   (same)\n//   subcategory_id → uuid   (AI returns a name; we resolve to UUID here)\n//   seo_title    → text     (enforced ≤ 60 chars)\n//   seo_description → text  (enforced ≤ 160 chars)\n// ─────────────────────────────────────────────────────────────────────────────\nconst SEO_TITLE_MAX      = 60;\nconst SEO_DESC_MAX       = 160;\nconst ITEM_MAX           = 120;   // max chars per pros/cons bullet\nconst MIN_ITEMS          = 3;\nconst MAX_ITEMS          = 5;\n\nconst aiRes  = $input.first().json;\nconst req    = $('Build AI Enrichment Request').first().json;\nconst norm   = req.normData;\n\n// ── Subcategory lookup table (name → uuid) ────────────────────────────────────\nconst subcatRows = $('Fetch Subcategories').all().map(i => i.json);\nconst nameToSubcatId = new Map();\nfor (const r of subcatRows) {\n  if (r?.id && r?.name) nameToSubcatId.set(String(r.name).trim().toLowerCase(), r.id);\n}\n\nfunction resolveSubcatId(aiName) {\n  if (!aiName || typeof aiName !== 'string') return null;\n  const key = aiName.trim().toLowerCase();\n  // 1. Exact match (case-insensitive)\n  if (nameToSubcatId.has(key)) return nameToSubcatId.get(key);\n  // 2. Starts-with match (handles minor suffix differences)\n  for (const [k, id] of nameToSubcatId) {\n    if (k.startsWith(key) || key.startsWith(k)) return id;\n  }\n  // 3. Contains match as last resort\n  for (const [k, id] of nameToSubcatId) {\n    if (k.includes(key) || key.includes(k)) return id;\n  }\n  return null;   // no match → column stays null\n}\n\n// ── Rate-limit guard ──────────────────────────────────────────────────────────\nif (aiRes?.error?.code === 429 || aiRes?.statusCode === 429) {\n  console.warn(JSON.stringify({ event:'ai_rate_limited', asin: norm.asin, ts: new Date().toISOString() }));\n  return [{ json: { ...norm, _aiStatus: 'rate_limited' } }];\n}\n\n// ── HTTP / API error guard ────────────────────────────────────────────────────\n// neverError:true swallows non-2xx responses; surface them loudly instead of\n// silently emitting empty AI fields. A 401 here = the OpenRouter credential is\n// not selected on the 'Call OpenRouter (AI Enrichment)' node (see n8n/README.md).\nif (aiRes && aiRes.error) {\n  const code = aiRes.error.code ?? 'unknown';\n  console.warn(JSON.stringify({ event:'ai_http_error', asin: norm.asin, code, message: String(aiRes.error.message || '').slice(0,200), ts: new Date().toISOString() }));\n  return [{ json: { ...norm, _aiStatus: `http_error_${code}` } }];\n}\n\n// ── Extract raw content string ────────────────────────────────────────────────\nfunction getContent(r) {\n  const str = r?.choices?.[0]?.message?.content;\n  if (typeof str === 'string' && str.trim()) return str;\n  if (Array.isArray(str)) return str.filter(x=>x?.type==='text').map(x=>x.text).join('');\n  return r?.choices?.[0]?.text ?? null;\n}\n\n// ── Loose JSON parser ─────────────────────────────────────────────────────────\nfunction parseLoose(text) {\n  if (!text) return null;\n  try { return JSON.parse(text); } catch {}\n  const f = text.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (f) { try { return JSON.parse(f[1]); } catch {} }\n  const a = text.indexOf('{'), b = text.lastIndexOf('}');\n  if (a >= 0 && b > a) { try { return JSON.parse(text.slice(a, b+1)); } catch {} }\n  return null;\n}\n\n// ── Sanitise helpers ──────────────────────────────────────────────────────────\n// Remove ASCII control chars (except tab/newline), trim.\nconst sanitise = (s) => String(s || '').replace(/[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]/g, '').trim();\nconst trunc    = (s, n) => sanitise(s).slice(0, n);\n\n// Validate + sanitise a text[] array field.\n// Returns an array of strings, clipped to [MIN_ITEMS..MAX_ITEMS] items.\nfunction normArray(arr) {\n  if (!Array.isArray(arr)) return [];\n  return arr\n    .map(x => trunc(String(x ?? ''), ITEM_MAX))\n    .filter(Boolean)\n    .slice(0, MAX_ITEMS);\n}\n\n// ── Parse response ────────────────────────────────────────────────────────────\nconst content = getContent(aiRes);\nconst parsed  = parseLoose(content);\n\nlet aiStatus        = 'success';\nlet subcategoryName = null;\nlet subcategory_id  = null;\nlet pros            = [];\nlet cons            = [];\nlet seo_title       = null;\nlet seo_description = null;\n\nif (!parsed) {\n  aiStatus = 'parse_failed';\n  console.warn(JSON.stringify({ event:'ai_parse_failed', asin: norm.asin, head: String(content||'').slice(0,300), ts: new Date().toISOString() }));\n} else {\n  // subcategory: resolve name → UUID\n  subcategoryName = sanitise(parsed.subcategory || '');\n  subcategory_id  = resolveSubcatId(subcategoryName) ?? null;\n  if (!subcategory_id && subcategoryName) aiStatus = 'subcategory_unresolved';\n\n  // pros / cons → text[] (stored as JSON arrays in payload, converted to pg text[] in upsert)\n  pros = normArray(parsed.pros);\n  cons = normArray(parsed.cons);\n  if (pros.length < MIN_ITEMS) aiStatus = aiStatus === 'success' ? 'partial_pros' : aiStatus;\n  if (cons.length < MIN_ITEMS) aiStatus = aiStatus === 'success' ? 'partial_cons' : aiStatus;\n\n  // seo fields\n  seo_title       = trunc(parsed.seo_title       || '', SEO_TITLE_MAX)  || null;\n  seo_description = trunc(parsed.seo_description || '', SEO_DESC_MAX)   || null;\n  if (!seo_title)       aiStatus = 'missing_seo_title';\n  if (!seo_description) aiStatus = aiStatus === 'success' ? 'missing_seo_description' : aiStatus;\n}\n\nconsole.log(JSON.stringify({\n  event:           'ai_enrichment_parsed',\n  asin:            norm.asin,\n  aiStatus,\n  subcategoryName,\n  subcategory_id,\n  seo_title_len:   seo_title?.length ?? 0,\n  seo_desc_len:    seo_description?.length ?? 0,\n  pros_count:      pros.length,\n  cons_count:      cons.length,\n  ts:              new Date().toISOString(),\n}));\n\nreturn [{\n  json: {\n    ...norm,\n    product: {\n      ...norm.product,\n      subcategory_id,    // uuid | null\n      pros,              // string[] (maps to text[] via jsonb_array_elements_text in upsert)\n      cons,              // string[] (same)\n      seo_title,         // string | null — max 60\n      seo_description,   // string | null — max 160\n    },\n    _aiStatus: aiStatus,\n  },\n}];\n"
+      },
+      "id": "e8af262f-fc7a-4655-890c-ca91a5c5357c",
+      "name": "Parse & Validate AI Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        43072,
+        4656
+      ],
+      "notes": "NEW: pros/cons returned as string[] (text[] compatible). subcategory_id resolved via 3-tier fuzzy match against Fetch Subcategories rows. seo_title ≤60, seo_description ≤160 hard-enforced."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bypass branch — AI fields already populated in DB; pass norm data unchanged.\nconst norm = $input.first().json;\nconsole.log(JSON.stringify({ event:'ai_skipped', asin: norm.asin, ts: new Date().toISOString() }));\nreturn [{ json: { ...norm, _aiStatus: 'skipped_already_populated' } }];\n"
+      },
+      "id": "d510ce52-cb8d-46d9-9e8a-47c94bb663f0",
+      "name": "AI Skip (already populated)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        42672,
+        4976
+      ],
+      "notes": "v3.2: False-branch of AI Fields Gate. Passes product through with existing DB values untouched (empty pros/cons/seo; the upsert's COALESCE/non-empty guards preserve DB values). Connects directly to Build Classifier Request."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build OpenRouter category classification request — unchanged from v1 logic.\nconst cfg = $('Config').first().json;\nconst categoriesRows = $('Fetch Categories').all().map(i => i.json);\nconst norm = $input.first().json;\n\nif (categoriesRows.length === 0) {\n  return [{ json: { skip: true, reason: 'no_categories_in_db', labelMap: [], normPassthrough: norm } }];\n}\n\nconst labelToId = new Map();\nconst lines = [];\nfor (const c of categoriesRows) {\n  if (!c?.id || !c?.name) continue;\n  let label = String(c.name).trim();\n  let suffix = 2;\n  while (labelToId.has(label)) label = `${c.name} #${suffix++}`;\n  labelToId.set(label, c.id);\n  const desc = c.description ? ` — ${String(c.description).slice(0,140)}` : '';\n  lines.push(`- ${label}${desc}`);\n}\n\nconst product = norm.product;\nconst productContext = [\n  `Title: ${product.title}`,\n  `Brand: ${product.brand}`,\n  product.short_description ? `Description: ${product.short_description}` : null,\n  product.tags?.length      ? `Tags: ${product.tags.slice(0,8).join(', ')}` : null,\n  product.features?.length  ? `Key features: ${product.features.slice(0,3).join('; ')}` : null,\n].filter(Boolean).join('\\n');\n\nconst systemPrompt = [\n  'You are a product categorization assistant for an affiliate deals website.',\n  'Given a product and a list of categories, return your TOP THREE most likely categories ranked by fit.',\n  'RESPOND WITH ONLY THIS JSON OBJECT — no prose, no code fences:',\n  '{\"rankings\":[{\"category\":\"<exact name from list>\",\"confidence\":<0.0-1.0>,\"reasoning\":\"<one short sentence>\"}]}',\n  'RULES:',\n  '- \"category\" MUST be copied verbatim from the list (text after \"- \", before any —).',\n  '- Up to 3 rankings, descending confidence. Minimum 1.',\n  '- If NO category fits return {\"rankings\":[]}.',\n  '- Output JSON only.',\n].join('\\n');\n\nconst requestBody = {\n  model:    cfg.openrouterModel,\n  messages: [\n    { role: 'system', content: systemPrompt },\n    { role: 'user',   content: `Available categories:\\n${lines.join('\\n')}\\n\\nProduct:\\n${productContext}` },\n  ],\n  temperature: 0,\n  max_tokens:  400,\n};\n\nreturn [{ json: { requestBody, labelMap: Array.from(labelToId.entries()), normPassthrough: norm } }];\n"
+      },
+      "id": "09b5006b-a1ce-4a9d-904c-0461a3c0517c",
+      "name": "Build Classifier Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        43472,
+        4816
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "HTTP-Referer",
+              "value": "={{ $('Config').first().json.openrouterReferer }}"
+            },
+            {
+              "name": "X-Title",
+              "value": "={{ $('Config').first().json.openrouterAppName }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "52b3466c-2265-4af0-bc72-7d91685162f4",
+      "name": "Call OpenRouter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        43664,
+        4816
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "openRouterApi": {
+          "id": "tH0AfYU9QeaRMYVN",
+          "name": "OpenRouter account"
+        }
+      },
+      "notes": "v3.3: Authorization injected by the predefined 'OpenRouter API' credential (same one as the enrichment node — select it here too). Category classifier call. On 401 it falls back to defaultCategoryId."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Resolve OpenRouter classifier response → category_id uuid.\nconst cfg = $('Config').first().json;\nconst res = $input.first().json;\nconst req = $('Build Classifier Request').first().json;\nconst norm = req.normPassthrough;\n\nconst threshold = Number(cfg.classifierConfidenceThreshold) || 0.6;\nconst labelToId = new Map(Array.isArray(req?.labelMap) ? req.labelMap : []);\n\nfunction extractContent(r) {\n  if (!r || typeof r !== 'object') return { content: null, shape: `non-object:${typeof r}` };\n  const str = r?.choices?.[0]?.message?.content;\n  if (typeof str === 'string' && str.trim()) return { content: str, shape: 'string' };\n  if (Array.isArray(str)) {\n    const t = str.filter(x=>x?.type==='text').map(x=>x.text).join('');\n    if (t.trim()) return { content: t, shape: 'parts' };\n  }\n  const legacy = r?.choices?.[0]?.text;\n  if (typeof legacy === 'string' && legacy.trim()) return { content: legacy, shape: 'legacy' };\n  return { content: null, shape: `keys=[${Object.keys(r).join(',')}] err=${JSON.stringify(r?.error??null).slice(0,200)}` };\n}\n\nfunction parseLoose(text) {\n  if (typeof text !== 'string') return { value: null, how: 'no-text' };\n  try { return { value: JSON.parse(text), how: 'direct' }; } catch {}\n  const f = text.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  if (f) { try { return { value: JSON.parse(f[1]), how: 'fenced' }; } catch {} }\n  const a = text.indexOf('{'), b = text.lastIndexOf('}');\n  if (a >= 0 && b > a) { try { return { value: JSON.parse(text.slice(a, b+1)), how: 'substr' }; } catch {} }\n  return { value: null, how: 'failed' };\n}\n\nfunction resolve() {\n  if (res?.skip)  return { id: cfg.defaultCategoryId, status: `fallback_${res.reason}`,           confidence: 0, note: 'no categories' };\n  if (res?.error) return { id: cfg.defaultCategoryId, status: 'fallback_api_error',               confidence: 0, note: String(res.error?.message||'') };\n  const { content, shape } = extractContent(res);\n  if (!content)   return { id: cfg.defaultCategoryId, status: 'fallback_empty_response',          confidence: 0, note: shape };\n  const { value: parsed, how } = parseLoose(content);\n  if (!parsed)    return { id: cfg.defaultCategoryId, status: 'fallback_parse_error',             confidence: 0, note: `${how}: ${content.slice(0,120)}` };\n  const rankings = Array.isArray(parsed?.rankings) ? parsed.rankings : [];\n  if (!rankings.length) return { id: cfg.defaultCategoryId, status: 'fallback_no_rankings',      confidence: 0, note: `parse:${how}` };\n  const missed = [];\n  for (let i = 0; i < rankings.length; i++) {\n    const cand  = rankings[i];\n    const label = cand?.category ?? cand?.categoryId;\n    const conf  = Number(cand?.confidence);\n    if (!label || typeof label !== 'string') { missed.push(`r${i+1}:missing`); continue; }\n    const realId = labelToId.get(label.trim());\n    if (!realId) { missed.push(`r${i+1}:\"${label}\"`); continue; }\n    if (!Number.isFinite(conf) || conf < threshold) {\n      return { id: cfg.defaultCategoryId, status: 'fallback_low_confidence', confidence: conf||0, note: `\"${label}\" conf=${conf}<${threshold}` };\n    }\n    return { id: realId, status: i === 0 ? 'classified' : `fallback_rank_${i+1}`, confidence: conf, note: `\"${label}\"→${realId}` };\n  }\n  return { id: cfg.defaultCategoryId, status: 'fallback_hallucinated', confidence: 0, note: `all invalid:[${missed.join(',')}]` };\n}\n\nconst r = resolve();\nconsole.log(JSON.stringify({ event:'category_resolved', asin: norm.asin, status: r.status, confidence: r.confidence, note: r.note, ts: new Date().toISOString() }));\n\nreturn [{\n  json: {\n    ...norm,\n    product: { ...norm.product, category_id: r.id },\n    _classifier: { status: r.status, confidence: r.confidence, note: r.note },\n  },\n}];\n"
+      },
+      "id": "01df495a-d4cb-415a-a07c-a0c96346a30c",
+      "name": "Resolve Category",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        43872,
+        4816
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Resolve Category').first().json.imageUrl }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "0f861af6-d5cc-4e47-b54e-ab8613a160e0",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        44064,
+        4816
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 10000
+    },
+    {
+      "parameters": {
+        "operation": "upload",
+        "bucketName": "={{ $('Config').first().json.s3Bucket }}",
+        "fileName": "={{ $('Resolve Category').first().json.imageKey }}",
+        "additionalFields": {}
+      },
+      "id": "79f8b99b-36ca-4512-b640-0153874a398e",
+      "name": "Upload to S3",
+      "type": "n8n-nodes-base.s3",
+      "typeVersion": 1,
+      "position": [
+        44368,
+        4816
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "s3": {
+          "id": "K0tkRtdEl8L4v0wY",
+          "name": "4EVERLAND"
+        }
+      },
+      "notes": "v3: REPLACES the hand-rolled SigV4 Code node + HTTP PUT pair. Uploads the downloaded image binary (property `data`) to the S3-compatible bucket using the '4everland S3' credential — endpoint (https://endpoint.4everland.co), region, access key, and secret key all live in n8n's credentials manager. Object key = Resolve Category.imageKey (e.g. products/amazon/<ASIN>/main.jpg). If 4everland rejects virtual-host addressing, enable 'Force Path Style' on the credential. Fallback documented in n8n/README.md if the native node can't reach the endpoint."
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─────────────────────────────────────────────────────────────────────────────\n// Build Payload  v2\n//\n// New vs v1:\n//   • pros / cons   → string[] arrays (text[] in DB)\n//   • subcategory_id → uuid | null\n//   • seo_og_image  → jsonb, built from the uploaded S3 key\n//   • seo_title / seo_description included\n// ─────────────────────────────────────────────────────────────────────────────\nconst cfg      = $('Config').first().json;\nconst resolved = $('Resolve Category').first().json;\nconst product  = resolved.product;\n\n// seo_og_image — jsonb matching the images[] object shape so the app can use it directly\nconst seo_og_image = {\n  key:    resolved.imageKey,\n  alt:    resolved.imageAlt,\n  width:  resolved.imageDim,\n  height: resolved.imageDim,\n};\n\nconst storedImage = {\n  key:    resolved.imageKey,\n  alt:    resolved.imageAlt,\n  width:  resolved.imageDim,\n  height: resolved.imageDim,\n};\n\nconst fullPayload = {\n  // ── Core scalar columns ──────────────────────────────────────────────────\n  slug:                 product.slug,\n  title:                product.title,\n  brand:                product.brand,\n  short_description:    product.short_description,\n  description:          product.description,\n  category_id:          product.category_id,\n  price:                product.price,\n  original_price:       product.original_price ?? null,\n  currency:             product.currency,\n  discount_percent:     product.discount_percent,\n  deal_label:           product.deal_label ?? null,\n  affiliate_source:     product.affiliate_source,\n  amazon_affiliate_tag: product.amazon_affiliate_tag ?? null,\n  affiliate_url:        product.affiliate_url,   // raw HTTPS amazon.com URL\n  rating:               product.rating,\n  // ── Array columns (text[]) — sent as JSON arrays, cast in upsert ─────────\n  features:             Array.isArray(product.features) ? product.features : [],\n  tags:                 Array.isArray(product.tags)     ? product.tags     : [],\n  pros:                 Array.isArray(product.pros)     ? product.pros     : [],\n  cons:                 Array.isArray(product.cons)     ? product.cons     : [],\n  // ── JSONB columns ─────────────────────────────────────────────────────────\n  images:               [storedImage],\n  seo_og_image,\n  // ── AI-enriched scalar columns ────────────────────────────────────────────\n  subcategory_id:       product.subcategory_id   ?? null,   // uuid | null\n  seo_title:            product.seo_title         ?? null,\n  seo_description:      product.seo_description   ?? null,\n};\n\nconsole.log(JSON.stringify({\n  event:          'payload_built',\n  asin:           resolved.asin,\n  slug:           product.slug,\n  affiliate_url:  product.affiliate_url,\n  subcategory_id: product.subcategory_id ?? null,\n  seo_title_len:  (product.seo_title  || '').length,\n  seo_desc_len:   (product.seo_description || '').length,\n  pros_count:     (product.pros  || []).length,\n  cons_count:     (product.cons  || []).length,\n  aiStatus:       resolved._aiStatus   || 'n/a',\n  classifier:     resolved._classifier,\n  ts:             new Date().toISOString(),\n}));\n\nreturn [{\n  json: {\n    payloadJson:       JSON.stringify(fullPayload),\n    defaultCategoryId: cfg.defaultCategoryId,\n    _classifier:       resolved._classifier,\n    _aiStatus:         resolved._aiStatus || 'n/a',\n  },\n}];\n"
+      },
+      "id": "c4051b15-a802-4fb4-9a39-d7fd54193df6",
+      "name": "Build Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        44672,
+        4816
+      ],
+      "notes": "v2: pros/cons as string[], subcategory_id (uuid), seo_og_image (jsonb) from S3 key. All column names match DB schema exactly."
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- ─────────────────────────────────────────────────────────────────────────────\n-- Upsert Product  v2\n--\n-- Column mapping (all names match DB schema exactly):\n--   pros / cons / features / tags  → text[]  (jsonb input → ARRAY(jsonb_array_elements_text(...)))\n--   subcategory_id                 → uuid    (nullable)\n--   seo_og_image                   → jsonb   (nullable)\n--   seo_title / seo_description    → text    (DB-level length guard as safety net)\n--\n-- All values arrive via a single parameterised JSONB blob ($1) — no SQL injection risk.\n-- $2 = defaultCategoryId used to decide whether to overwrite category_id on conflict.\n-- ─────────────────────────────────────────────────────────────────────────────\nWITH input AS (\n  SELECT * FROM jsonb_to_record($1::jsonb) AS r(\n    slug                 text,\n    title                text,\n    brand                text,\n    short_description    text,\n    description          text,\n    category_id          uuid,\n    price                numeric,\n    original_price       numeric,\n    currency             text,\n    discount_percent     int,\n    deal_label           text,\n    affiliate_source     text,\n    amazon_affiliate_tag text,\n    affiliate_url        text,\n    rating               real,\n    images               jsonb,\n    features             jsonb,\n    tags                 jsonb,\n    pros                 jsonb,\n    cons                 jsonb,\n    subcategory_id       uuid,\n    seo_title            text,\n    seo_description      text,\n    seo_og_image         jsonb\n  )\n)\nINSERT INTO products (\n  slug, title, brand, short_description, description,\n  category_id, price, original_price, currency, discount_percent,\n  deal_label, is_deal, affiliate_source, amazon_affiliate_tag, affiliate_url,\n  rating, images, features, tags, pros, cons,\n  subcategory_id, seo_title, seo_description, seo_og_image,\n  published_at\n)\nSELECT\n  slug, title, brand, short_description, description,\n  category_id,\n  price::numeric(10,2),\n  original_price::numeric(10,2),\n  currency::public.currency,\n  discount_percent,\n  deal_label,\n  true,                                      -- is_deal\n  affiliate_source::public.affiliate_source,\n  amazon_affiliate_tag,\n  affiliate_url,                             -- stored as-is: raw HTTPS amazon.com URL\n  rating,\n  images,\n  -- text[] columns: convert jsonb array → postgres text[]\n  ARRAY(SELECT jsonb_array_elements_text(features))  AS features,\n  ARRAY(SELECT jsonb_array_elements_text(tags))       AS tags,\n  ARRAY(SELECT jsonb_array_elements_text(pros))       AS pros,\n  ARRAY(SELECT jsonb_array_elements_text(cons))       AS cons,\n  -- uuid (nullable)\n  subcategory_id,\n  -- DB-level length guard (application already enforces, but belt-and-suspenders)\n  left(seo_title, 60)                        AS seo_title,\n  left(seo_description, 160)                 AS seo_description,\n  seo_og_image,\n  NOW()                                      AS published_at\nFROM input\nON CONFLICT (slug) DO UPDATE SET\n  title                = EXCLUDED.title,\n  brand                = EXCLUDED.brand,\n  short_description    = EXCLUDED.short_description,\n  description          = EXCLUDED.description,\n  price                = EXCLUDED.price,\n  original_price       = EXCLUDED.original_price,\n  currency             = EXCLUDED.currency,\n  discount_percent     = EXCLUDED.discount_percent,\n  deal_label           = EXCLUDED.deal_label,\n  is_deal              = true,\n  affiliate_url        = EXCLUDED.affiliate_url,\n  amazon_affiliate_tag = EXCLUDED.amazon_affiliate_tag,\n  rating               = EXCLUDED.rating,\n  -- JSONB array: only replace if incoming has items\n  images               = CASE WHEN jsonb_array_length(EXCLUDED.images) > 0\n                               THEN EXCLUDED.images ELSE products.images END,\n  seo_og_image         = COALESCE(EXCLUDED.seo_og_image, products.seo_og_image),\n  -- text[] columns: only replace if incoming array is non-empty\n  features             = CASE WHEN array_length(EXCLUDED.features, 1) > 0\n                               THEN EXCLUDED.features ELSE products.features END,\n  tags                 = CASE WHEN array_length(EXCLUDED.tags, 1) > 0\n                               THEN EXCLUDED.tags     ELSE products.tags     END,\n  -- pros / cons: COALESCE preserves existing populated values when AI was skipped\n  pros                 = CASE WHEN array_length(EXCLUDED.pros, 1) > 0\n                               THEN EXCLUDED.pros     ELSE products.pros     END,\n  cons                 = CASE WHEN array_length(EXCLUDED.cons, 1) > 0\n                               THEN EXCLUDED.cons     ELSE products.cons     END,\n  -- category_id: only overwrite when current value is still the default\n  category_id          = CASE WHEN products.category_id = $2::uuid\n                               THEN EXCLUDED.category_id ELSE products.category_id END,\n  -- subcategory_id: COALESCE — don't erase an existing value if AI returned null\n  subcategory_id       = COALESCE(EXCLUDED.subcategory_id, products.subcategory_id),\n  -- AI SEO fields: COALESCE preserves existing values when AI was skipped\n  seo_title            = COALESCE(EXCLUDED.seo_title,       products.seo_title),\n  seo_description      = COALESCE(EXCLUDED.seo_description, products.seo_description),\n  updated_at           = NOW()\nRETURNING id, slug, (xmax = 0) AS was_inserted;",
+        "options": {
+          "queryReplacement": "={{ [$json.payloadJson, $json.defaultCategoryId] }}"
+        }
+      },
+      "id": "573a8d95-cd2e-4ae7-b4de-432e26b06fde",
+      "name": "Upsert Product",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        44864,
+        4816
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "Pp8DqRRvEdB44B6i",
+          "name": "Every Offer DB"
+        }
+      },
+      "notes": "v2: All 34 DB columns mapped correctly. pros/cons/features/tags → text[] via jsonb_array_elements_text. subcategory_id (uuid). seo_og_image (jsonb). COALESCE on AI fields preserves existing data when AI is skipped."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Audit Log — structured JSON per product for debugging / monitoring.\nconst upsert  = $input.first().json;\nconst payload = $('Build Payload').first().json;\n\nconst entry = {\n  event:        'product_upserted',\n  id:           upsert.id,\n  slug:         upsert.slug,\n  was_inserted: upsert.was_inserted,\n  ai_status:    payload._aiStatus,\n  classifier:   payload._classifier,\n  ts:           new Date().toISOString(),\n};\n\nconsole.log(JSON.stringify(entry));\nreturn [{ json: { ...upsert, _log: entry } }];\n"
+      },
+      "id": "2857a0c4-3833-4ba2-9bbf-15e9579b04f4",
+      "name": "Audit Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        45072,
+        4816
+      ],
+      "notes": "NEW: Structured audit log entry after every upsert. Extend to POST to a webhook / Datadog / Slack."
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('Config').first().json.throttleSec }}"
+      },
+      "id": "0f1e4b99-fbaf-4353-ac82-b9b1bc04b1a6",
+      "name": "Throttle",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        45264,
+        4816
+      ],
+      "webhookId": "1da853bc-b62b-452d-be6e-2ba8feaf445d",
+      "notes": "Configurable gap between ASIN iterations → back to Loop Over Items."
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('Config').first().json.aiRateLimitSeconds }}"
+      },
+      "id": "dee13eff-9556-483e-8eb4-f140e3c89c30",
+      "name": "AI Rate Limit (Enrichment)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        42768,
+        4656
+      ],
+      "webhookId": "2cf9647d-1a3e-4b22-9b51-6d4c7e0f1a01",
+      "notes": "v3: Proactively spaces OpenRouter requests by aiRateLimitMs (Config). Sits before the AI enrichment call. retryOnFail on the HTTP node still handles 429/transient errors reactively."
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('Config').first().json.aiRateLimitSeconds }}"
+      },
+      "id": "ea308680-19b1-4bfc-912f-6e823206e1a9",
+      "name": "AI Rate Limit (Classifier)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        43568,
+        4816
+      ],
+      "webhookId": "3da0758e-2b4f-4c33-a062-7e5d8f1a2b12",
+      "notes": "v3: Proactively spaces the second OpenRouter request (category classifier) by aiRateLimitMs (Config)."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every 6 hours": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Fetch Categories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Categories": {
+      "main": [
+        [
+          {
+            "node": "Fetch Subcategories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Subcategories": {
+      "main": [
+        [
+          {
+            "node": "Get Creators Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Creators Token": {
+      "main": [
+        [
+          {
+            "node": "Search Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Items": {
+      "main": [
+        [
+          {
+            "node": "Extract Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Items": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Normalise",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalise": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Check Existing AI Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Skipped Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Skipped Item": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing AI Fields": {
+      "main": [
+        [
+          {
+            "node": "Compute AI Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute AI Gate": {
+      "main": [
+        [
+          {
+            "node": "AI Fields Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Fields Gate": {
+      "main": [
+        [
+          {
+            "node": "Build AI Enrichment Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Skip (already populated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI Enrichment Request": {
+      "main": [
+        [
+          {
+            "node": "AI Rate Limit (Enrichment)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Rate Limit (Enrichment)": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter (AI Enrichment)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter (AI Enrichment)": {
+      "main": [
+        [
+          {
+            "node": "Parse & Validate AI Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Validate AI Fields": {
+      "main": [
+        [
+          {
+            "node": "Build Classifier Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Skip (already populated)": {
+      "main": [
+        [
+          {
+            "node": "Build Classifier Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Classifier Request": {
+      "main": [
+        [
+          {
+            "node": "AI Rate Limit (Classifier)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Rate Limit (Classifier)": {
+      "main": [
+        [
+          {
+            "node": "Call OpenRouter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call OpenRouter": {
+      "main": [
+        [
+          {
+            "node": "Resolve Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Category": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Upload to S3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to S3": {
+      "main": [
+        [
+          {
+            "node": "Build Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Payload": {
+      "main": [
+        [
+          {
+            "node": "Upsert Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Product": {
+      "main": [
+        [
+          {
+            "node": "Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audit Log": {
+      "main": [
+        [
+          {
+            "node": "Throttle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttle": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "51fd2af1-352f-428b-9d3c-7e4f7b10ed5e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "6d781aaa894967afb3f7c4ab8ad0c19b8c2ba7a7ea0927aaffe38690f2e9f653"
+  },
+  "id": "ldXf8deQQ4KOrZ19",
+  "tags": []
+}
