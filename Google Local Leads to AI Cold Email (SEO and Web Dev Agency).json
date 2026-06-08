@@ -1,0 +1,618 @@
+{
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f0a9f237-8847-43d1-a4c7-a16fcb477467",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2208,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "searchQuery",
+              "value": "web design companies in Austin, TX",
+              "type": "string"
+            },
+            {
+              "id": "p2",
+              "name": "resultLimit",
+              "value": 20,
+              "type": "number"
+            },
+            {
+              "id": "p3",
+              "name": "serpApiKey",
+              "value": "REPLACE_WITH_SERPAPI_KEY",
+              "type": "string"
+            },
+            {
+              "id": "p4",
+              "name": "agencyName",
+              "value": "Acme Digital",
+              "type": "string"
+            },
+            {
+              "id": "p5",
+              "name": "agencyServices",
+              "value": "technical SEO, local search optimization, and high-converting web development",
+              "type": "string"
+            },
+            {
+              "id": "p6",
+              "name": "senderName",
+              "value": "Jane Doe",
+              "type": "string"
+            },
+            {
+              "id": "p7",
+              "name": "senderTitle",
+              "value": "Growth Lead",
+              "type": "string"
+            },
+            {
+              "id": "p8",
+              "name": "agencyAddress",
+              "value": "123 Market St, Austin, TX 78701",
+              "type": "string"
+            },
+            {
+              "id": "p9",
+              "name": "calendarLink",
+              "value": "https://cal.com/acme-digital/intro",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f5774998-168a-4ee7-b282-468fd27bdaae",
+      "name": "Set Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -2016,
+        160
+      ],
+      "notes": "Edit these values. Move serpApiKey to n8n credentials/variables for production."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "id": "68d8a29f-abc9-401b-a647-4ee411398e79",
+      "name": "Get Existing Leads",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1792,
+        368
+      ],
+      "continueOnFail": true,
+      "notes": "Dead-end branch used only for de-duplication. Create a sheet/tab named 'Leads' with header columns: BusinessName, Category, Website, Email, Phone, Location, Subject, SentAt"
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google_maps"
+            },
+            {
+              "name": "type",
+              "value": "search"
+            },
+            {
+              "name": "q",
+              "value": "={{ $('Set Parameters').item.json.searchQuery }}"
+            },
+            {
+              "name": "hl",
+              "value": "en"
+            },
+            {
+              "name": "api_key",
+              "value": "={{ $('Set Parameters').item.json.serpApiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "05551d45-ece9-49ba-87f2-aa2f608dd544",
+      "name": "SerpAPI Google Maps Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1792,
+        80
+      ],
+      "notes": "Uses SerpAPI's google_maps engine. Returns business listings in local_results[]."
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "local_results",
+        "options": {}
+      },
+      "id": "f482eaa0-7c2b-4392-8923-3d39ae25b653",
+      "name": "Split Out Results",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -1568,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "f1",
+              "leftValue": "={{ $json.website }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c604db94-1eb4-4479-b974-1679cae4a446",
+      "name": "Filter: Has Website",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        -1344,
+        80
+      ],
+      "notes": "Only keep prospects that have a website (so we can scrape a contact email and audit it)."
+    },
+    {
+      "parameters": {
+        "maxItems": "={{ $('Set Parameters').item.json.resultLimit }}"
+      },
+      "id": "078681d4-39e8-4836-904a-261ab06a885f",
+      "name": "Limit Results",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -1136,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "reset": false
+        }
+      },
+      "id": "80def452-8805-4353-87d5-4c895fad7005",
+      "name": "Loop Over Leads",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -896,
+        80
+      ],
+      "notes": "Processes one lead at a time so the Wait node can throttle sending."
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.website }}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          },
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "0411ed54-f9f4-42fe-b5c4-b0db8f5d3563",
+      "name": "Fetch Website HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -656,
+        0
+      ],
+      "continueOnFail": true,
+      "notes": "Fetches the prospect homepage so we can extract a contact email and reference it in the cold email."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract a contact email from the fetched homepage and de-duplicate\n// against the leads already stored in the Google Sheet.\n\nconst lead = $('Loop Over Leads').item.json;\nconst resp = $input.item.json;\nconst html = typeof resp.data === 'string'\n  ? resp.data\n  : (typeof resp.body === 'string' ? resp.body : '');\n\n// Build the set of emails we already contacted\nlet existing = [];\ntry {\n  existing = $items('Get Existing Leads')\n    .map(i => String(i.json.Email || '').toLowerCase().trim())\n    .filter(Boolean);\n} catch (e) {\n  existing = [];\n}\n\n// Find email candidates\nconst regex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/g;\nlet found = (html.match(regex) || []);\n\n// Strip common junk / asset / vendor noise\nconst bad = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.css', '.js',\n  'sentry', 'wixpress', 'godaddy', 'example.com', 'yourdomain', 'domain.com',\n  'email@', 'name@', 'user@', 'sentry.io', '.webp'];\nfound = found\n  .map(e => e.toLowerCase().trim())\n  .filter(e => !bad.some(b => e.includes(b)));\n\n// De-duplicate within the page\nfound = [...new Set(found)];\n\nconst email = found[0] || '';\nconst emailFound = email.length > 0;\nconst isNewLead = emailFound && !existing.includes(email);\n\nreturn [{\n  json: {\n    businessName: lead.title || '',\n    category: lead.type || (Array.isArray(lead.types) ? lead.types[0] : '') || '',\n    address: lead.address || '',\n    phone: lead.phone || '',\n    website: lead.website || '',\n    rating: lead.rating || null,\n    reviews: lead.reviews || null,\n    email,\n    emailFound,\n    isNewLead\n  }\n}];"
+      },
+      "id": "da774cd0-04c1-44e5-9263-8eae166a7172",
+      "name": "Extract & Dedupe Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "i1",
+              "leftValue": "={{ $json.emailFound }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "i2",
+              "leftValue": "={{ $json.isNewLead }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "905621bc-6911-410b-8a42-7f34cd5466b1",
+      "name": "IF: New Lead With Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"temperature\": 0.7,\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an SDR for {{ $('Set Parameters').item.json.agencyName }}, a digital marketing agency specialized in {{ $('Set Parameters').item.json.agencyServices }}. Write a concise, genuine, non-spammy cold email to a local business. Rules: under 120 words, no fake flattery, reference the specific business and a plausible, concrete SEO or website improvement opportunity for their niche, one soft call to action to book a quick call, conversational tone, no buzzword stuffing. Return STRICT JSON with exactly two keys: subject and body. Do NOT include a signature or unsubscribe text.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Business: {{ $json.businessName }}\\nNiche/Category: {{ $json.category }}\\nLocation: {{ $json.address }}\\nGoogle rating: {{ $json.rating }} from {{ $json.reviews }} reviews\\nWebsite: {{ $json.website }}\\nWrite the personalized cold email now.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "5c58137d-36cd-4578-8133-15663c296a06",
+      "name": "Generate Cold Email (OpenAI)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        32,
+        -80
+      ],
+      "notes": "Requires an 'OpenAI' credential configured in n8n. Swap model if desired."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the model JSON and append a compliant signature/footer\nconst params = $('Set Parameters').item.json;\nconst lead = $('IF: New Lead With Email').item.json;\nconst raw = $input.item.json;\n\nlet content = '';\ntry {\n  content = raw.choices[0].message.content;\n} catch (e) {\n  content = raw.body && raw.body.choices ? raw.body.choices[0].message.content : '';\n}\n\n// Strip code fences if present\ncontent = String(content).replace(/```json|```/g, '').trim();\n\nlet parsed = { subject: '', body: '' };\ntry {\n  parsed = JSON.parse(content);\n} catch (e) {\n  parsed = { subject: `Quick idea for ${lead.businessName}`, body: content };\n}\n\nconst footer = [\n  '',\n  '',\n  `${params.senderName} — ${params.senderTitle}`,\n  `${params.agencyName}`,\n  `Book a 15-min call: ${params.calendarLink}`,\n  '',\n  `${params.agencyName} · ${params.agencyAddress}`,\n  \"You're receiving this one-time outreach because your business appears in public local listings. Reply 'unsubscribe' and you'll never hear from us again.\"\n].join('\\n');\n\nreturn [{\n  json: {\n    ...lead,\n    subject: parsed.subject,\n    emailBody: `${parsed.body}${footer}`,\n    sentAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "d610919d-4934-4fac-9f2d-110853b8db5e",
+      "name": "Parse & Add Footer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        256,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "acf45bd9-b64e-4835-906f-200b2b73bff4",
+      "name": "Send Cold Email (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        480,
+        -80
+      ],
+      "webhookId": "1c758643-08ca-444b-a1e2-3bfac661a3f2",
+      "notes": "Requires a Gmail OAuth2 credential. You can swap this for the SMTP / 'Send Email' node for any provider."
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_GOOGLE_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "BusinessName": "={{ $json.businessName }}",
+            "Category": "={{ $json.category }}",
+            "Website": "={{ $json.website }}",
+            "Email": "={{ $json.email }}",
+            "Phone": "={{ $json.phone }}",
+            "Location": "={{ $json.address }}",
+            "Subject": "={{ $json.subject }}",
+            "SentAt": "={{ $json.sentAt }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "bf660afb-5e6a-45f1-b8f3-247bf425d6c2",
+      "name": "Log Lead to Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        704,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 45,
+        "unit": "seconds"
+      },
+      "id": "853a39a7-593f-4438-b3d9-9f1ec78d05c9",
+      "name": "Throttle (Wait)",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        912,
+        -80
+      ],
+      "webhookId": "69f72d48-c862-42f1-a641-b237ec167aab",
+      "notes": "Spacing between sends protects deliverability/sender reputation. Increase for cold domains."
+    },
+    {
+      "parameters": {},
+      "id": "d22c6c46-9927-4621-8eec-439ff40fd960",
+      "name": "Done",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        224
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Parameters": {
+      "main": [
+        [
+          {
+            "node": "SerpAPI Google Maps Search",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Existing Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI Google Maps Search": {
+      "main": [
+        [
+          {
+            "node": "Split Out Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Results": {
+      "main": [
+        [
+          {
+            "node": "Filter: Has Website",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: Has Website": {
+      "main": [
+        [
+          {
+            "node": "Limit Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit Results": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Leads": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Website HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Website HTML": {
+      "main": [
+        [
+          {
+            "node": "Extract & Dedupe Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Dedupe Email": {
+      "main": [
+        [
+          {
+            "node": "IF: New Lead With Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: New Lead With Email": {
+      "main": [
+        [
+          {
+            "node": "Generate Cold Email (OpenAI)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Cold Email (OpenAI)": {
+      "main": [
+        [
+          {
+            "node": "Parse & Add Footer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Add Footer": {
+      "main": [
+        [
+          {
+            "node": "Send Cold Email (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Cold Email (Gmail)": {
+      "main": [
+        [
+          {
+            "node": "Log Lead to Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Lead to Sheet": {
+      "main": [
+        [
+          {
+            "node": "Throttle (Wait)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Throttle (Wait)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "6d781aaa894967afb3f7c4ab8ad0c19b8c2ba7a7ea0927aaffe38690f2e9f653"
+  }
+}
